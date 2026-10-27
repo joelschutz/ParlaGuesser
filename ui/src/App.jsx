@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PocketBase from 'pocketbase';
 import {
     ArrowUpRight,
@@ -41,6 +41,7 @@ function PersonPortrait({ person, compact = false }) {
 }
 
 export default function App() {
+    const appShellRef = useRef(null);
     const [challenges, setChallenges] = useState(demoChallenges);
     const [people, setPeople] = useState(demoPeople);
     const [isDemo, setIsDemo] = useState(true);
@@ -87,6 +88,41 @@ export default function App() {
         }
     }, [answered, secondsLeft]);
 
+    useEffect(() => {
+        const appShell = appShellRef.current;
+        if (!appShell) return undefined;
+
+        let frameId = 0;
+        const updateScrollEffects = () => {
+            cancelAnimationFrame(frameId);
+            frameId = requestAnimationFrame(() => {
+                appShell.querySelectorAll('.scroll-proposition-copy').forEach((element) => {
+                    const top = element.getBoundingClientRect().top;
+                    const progress = Math.min(1, Math.max(0, (180 - top) / 104));
+                    element.style.setProperty('--copy-opacity', String(1 - progress * 0.86));
+                    element.style.setProperty('--copy-offset', `${progress * -18}px`);
+                });
+
+                appShell.querySelectorAll('.scroll-answer-option').forEach((element) => {
+                    const top = element.getBoundingClientRect().top;
+                    const progress = Math.min(1, Math.max(0, (window.innerHeight - top) / (window.innerHeight * 0.32)));
+                    element.style.setProperty('--choice-opacity', String(0.65 + progress * 0.35));
+                    element.style.setProperty('--choice-offset', `${(1 - progress) * 22}px`);
+                });
+            });
+        };
+
+        updateScrollEffects();
+        window.addEventListener('scroll', updateScrollEffects, { passive: true });
+        window.addEventListener('resize', updateScrollEffects);
+
+        return () => {
+            cancelAnimationFrame(frameId);
+            window.removeEventListener('scroll', updateScrollEffects);
+            window.removeEventListener('resize', updateScrollEffects);
+        };
+    }, [round]);
+
     function chooseAnswer(person) {
         if (answered || !round || secondsLeft <= 0) return;
         const correct = person.id === round.correct.id;
@@ -124,7 +160,7 @@ export default function App() {
         : 'Sem data registrada';
 
     return (
-        <div className="app-shell">
+        <div className="app-shell" ref={appShellRef}>
             <header className="topbar">
                 <a className="brand" href="#inicio" aria-label="ParlaGuessr, início">
                     <span className="brand-mark"><Landmark size={21} strokeWidth={2.2} /></span>
@@ -134,39 +170,28 @@ export default function App() {
                     <span className="edition-label">MARATONA · BRASIL</span>
                     <span className="topbar-divider" />
                     <span className="round-label">RODADA {String(roundNumber).padStart(2, '0')}</span>
+                    <span className="topbar-divider" />
+                    <div className="topbar-stats" aria-label="Placar da partida">
+                        <div className="topbar-stat topbar-stat--timer" aria-label={`${secondsLeft} segundos restantes`}>
+                            <span className="eyebrow">TEMPO</span>
+                            <strong className={secondsLeft <= 8 && !answered ? 'is-urgent' : ''}>{String(secondsLeft).padStart(2, '0')}<small>s</small></strong>
+                            <span className="topbar-timer-track" aria-hidden="true"><i style={{ width: `${progress}%` }} /></span>
+                        </div>
+                        <div className="topbar-stat topbar-stat--score">
+                            <span className="eyebrow">PONTOS</span>
+                            <strong>{score.toLocaleString('pt-BR')}<small>PTS</small></strong>
+                        </div>
+                        <div className="topbar-stat topbar-stat--streak">
+                            <Trophy size={15} aria-hidden="true" />
+                            <span className="eyebrow">SEQUÊNCIA</span>
+                            <strong>{String(streak).padStart(2, '0')}</strong>
+                        </div>
+                    </div>
                 </div>
             </header>
 
             <main className={`game-layout${answered ? ' has-result' : ''}`} id="inicio">
                 <section className="game-column" aria-label="Desafio da rodada">
-                    <div className="game-hud" aria-label="Placar da partida">
-                        <section className="timer-block" aria-label="Tempo restante">
-                            <div className="timer-copy">
-                                <p className="eyebrow">TEMPO</p>
-                                <strong className="timer-value">{String(secondsLeft).padStart(2, '0')}<small>s</small></strong>
-                            </div>
-                            <div
-                                className={`timer-track${secondsLeft <= 8 && !answered ? ' timer-track--urgent' : ''}`}
-                                role="progressbar"
-                                aria-label="Tempo restante"
-                                aria-valuemin="0"
-                                aria-valuemax={ROUND_SECONDS}
-                                aria-valuenow={secondsLeft}
-                            >
-                                <span style={{ width: `${progress}%` }} />
-                            </div>
-                        </section>
-                        <section className="score-card" aria-label="Pontuação">
-                            <p className="eyebrow">SUA PONTUAÇÃO</p>
-                            <div className="score-row">
-                                <strong className="score-total">{score.toLocaleString('pt-BR')}</strong>
-                                <span className="score-unit">PTS</span>
-                                <span className="score-potential">+{scoreFor(secondsLeft)}</span>
-                            </div>
-                            <p className="score-note">100 base + 10 por segundo</p>
-                        </section>
-                    </div>
-
                     {isDemo && (
                         <div className="demo-notice" role="status">
                             <span className="demo-symbol">i</span>
@@ -179,57 +204,49 @@ export default function App() {
                             <span className="challenge-type">{round.challenge.tipo || 'DESAFIO'}</span>
                             <span className="challenge-date">RODADA {String(roundNumber).padStart(2, '0')} · {eventDate}</span>
                         </div>
-                        <p className="proposition-label">A PROPOSIÇÃO</p>
-                        <h1 className="proposition-title">{round.challenge.titulo}</h1>
-                        <p className="challenge-description">
+                        <p className="proposition-label scroll-proposition-copy">A PROPOSIÇÃO</p>
+                        <h1 className="proposition-title scroll-proposition-copy">{round.challenge.titulo}</h1>
+                        <p className="challenge-description scroll-proposition-copy">
                             {round.challenge.descricao || 'Qual parlamentar está associado a esta iniciativa?'}
                         </p>
-                        {sourceUrl ? (
-                            <a className="source-link" href={sourceUrl} target="_blank" rel="noreferrer">
-                                VER FONTE OFICIAL <ArrowUpRight size={14} />
-                            </a>
-                        ) : (
-                            <span className="source-link source-link--muted">FONTE OFICIAL INDISPONÍVEL</span>
-                        )}
                         <span className="panel-index" aria-hidden="true">PG / 0{roundNumber}</span>
-                    </article>
 
-                    <div className="answer-heading">
-                        <div>
-                            <p className="eyebrow">QUEM ESTÁ LIGADO A ESTA PROPOSIÇÃO?</p>
+                        <div className="answer-section">
+                            <div className="answer-heading">
+                                <div>
+                                    <p className="eyebrow">QUEM ESTÁ LIGADO A ESTA PROPOSIÇÃO?</p>
+                                </div>
+                                <span className="answer-count">04 OPÇÕES</span>
+                            </div>
+
+                            <div className="answer-grid" role="group" aria-label="Opções de resposta">
+                                {round.choices.map((person, index) => (
+                                    <button
+                                        className={`answer-option scroll-answer-option${answered && person.id === round.correct.id ? ' is-correct' : ''}${answered?.selectedId === person.id && !resultCorrect ? ' is-wrong' : ''}${answered ? ' is-locked' : ''}`}
+                                        key={person.id}
+                                        onClick={() => chooseAnswer(person)}
+                                        disabled={Boolean(answered)}
+                                    >
+                                        <span className="option-index">0{index + 1}</span>
+                                        <PersonPortrait person={person} compact />
+                                        <span className="option-copy">
+                                            <strong>{person.nome_politico}</strong>
+                                            <small>{person.partido || 'Partido não informado'} <i /> {person.uf || 'UF --'}</small>
+                                        </span>
+                                        <span className="option-result">
+                                            {answered && person.id === round.correct.id && <Check size={17} />}
+                                            {answered?.selectedId === person.id && !resultCorrect && <X size={17} />}
+                                            {!answered && <ChevronRight size={17} />}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                        <span className="answer-count">04 OPÇÕES</span>
-                    </div>
-
-                    {!answered && <div className="answer-grid" role="group" aria-label="Opções de resposta">
-                        {round.choices.map((person, index) => {
-                            return (
-                                <button
-                                    className="answer-option"
-                                    key={person.id}
-                                    onClick={() => chooseAnswer(person)}
-                                >
-                                    <span className="option-index">0{index + 1}</span>
-                                    <PersonPortrait person={person} compact />
-                                    <span className="option-copy">
-                                        <strong>{person.nome_politico}</strong>
-                                        <small>{person.partido || 'Partido não informado'} <i /> {person.uf || 'UF --'}</small>
-                                    </span>
-                                    <span className="option-result">
-                                        <ChevronRight size={17} />
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>}
+                    </article>
 
                 </section>
 
                 <aside className="game-meta" aria-label="Detalhes da partida">
-                    <section className="streak-card">
-                        <span className="streak-icon"><Trophy size={18} /></span>
-                        <div><p className="eyebrow">SEQUÊNCIA</p><strong>{String(streak).padStart(2, '0')} <small>acertos</small></strong></div>
-                    </section>
                     <div className="side-quote">
                         <span className="quote-mark">“</span>
                         <p>Transparência não é favor.<br />É o mínimo.</p>
@@ -261,8 +278,14 @@ export default function App() {
                                 <b>{round.correct.uf || 'UF não informada'}</b>
                                 <span>{round.correct.casa || 'Congresso Nacional'}</span>
                             </div>
-                            {sourceUrl && <a className="audit-button" href={sourceUrl} target="_blank" rel="noreferrer">AUDITAR <ArrowUpRight size={14} /></a>}
                         </div>
+                        {sourceUrl ? (
+                            <a className="audit-button reveal-source-link" href={sourceUrl} target="_blank" rel="noreferrer">
+                                VER FONTE OFICIAL DA PROPOSIÇÃO <ArrowUpRight size={14} />
+                            </a>
+                        ) : (
+                            <span className="reveal-source-unavailable">FONTE OFICIAL INDISPONÍVEL</span>
+                        )}
                         <button className="next-button" onClick={nextRound}>
                             PRÓXIMO DESAFIO <ChevronRight size={17} />
                         </button>

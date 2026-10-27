@@ -44,10 +44,21 @@ a {
 }
 
 .app-shell {
+    position: relative;
+    isolation: isolate;
     min-height: 100vh;
-    overflow: hidden;
+    overflow: clip;
+}
+
+.app-shell::before {
+    position: fixed;
+    z-index: -1;
+    inset: 0;
+    background-color: var(--paper);
     background-image: radial-gradient(#536c5a14 .7px, transparent .7px);
     background-size: 8px 8px;
+    content: '';
+    pointer-events: none;
 }
 
 .topbar {
@@ -212,7 +223,7 @@ h1 span {
 
 .challenge-panel {
     position: relative;
-    overflow: hidden;
+    overflow: clip;
     min-height: 217px;
     padding: 21px 24px 23px;
     color: #eff5e9;
@@ -1389,8 +1400,631 @@ h1 span {
     }
 }
 
+@media (max-width: 430px) {
+    .has-result {
+        padding-bottom: 0;
+    }
+
+    .game-layout {
+        width: calc(100% - 24px);
+        margin: 8px auto 12px;
+    }
+
+    .demo-notice {
+        margin-bottom: 8px;
+        padding: 6px 9px;
+        font-size: 9px;
+        line-height: 1.25;
+    }
+
+    .challenge-panel {
+        padding: 14px 14px 16px;
+    }
+
+    .challenge-date {
+        font-size: 7px;
+    }
+
+    .proposition-label {
+        margin: 15px 0 5px;
+        font-size: 8px;
+    }
+
+    .proposition-title {
+        font-size: 26px;
+        line-height: 1.02;
+    }
+
+    .challenge-description {
+        margin-top: 7px;
+        font-size: 11px;
+        line-height: 1.3;
+    }
+
+    .answer-section {
+        margin-top: 14px;
+        padding-top: 10px;
+    }
+
+    .answer-section .answer-heading {
+        margin-bottom: 6px;
+    }
+
+    .answer-section .answer-heading .eyebrow,
+    .answer-section .answer-count {
+        font-size: 8px;
+    }
+
+    .answer-section .answer-grid {
+        gap: 5px;
+    }
+
+    .answer-section .answer-option {
+        min-height: 53px;
+        gap: 7px;
+        padding: 5px 8px;
+    }
+
+    .answer-section .person-portrait--compact {
+        width: 30px;
+        height: 30px;
+        flex-basis: 30px;
+    }
+
+    .answer-section .option-copy {
+        gap: 2px;
+    }
+
+    .answer-section .option-copy strong {
+        font-size: 11px;
+    }
+
+    .answer-section .option-copy small,
+    .answer-section .option-index {
+        font-size: 8px;
+    }
+}
+
+:root {
+    --bottom-bar-height: 52px;
+}
+
+.app-shell {
+    padding-bottom: calc(var(--bottom-bar-height) + env(safe-area-inset-bottom));
+}
+
+.side-footer {
+    position: fixed;
+    z-index: 20;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    min-height: calc(var(--bottom-bar-height) + env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 max(5.2vw, 22px) env(safe-area-inset-bottom);
+    border-top: 1px solid var(--line);
+    background: #f2f3edf2;
+    backdrop-filter: blur(14px);
+}
+
+.has-result .reveal-panel {
+    bottom: calc(var(--bottom-bar-height) + env(safe-area-inset-bottom) + 12px);
+    max-height: min(360px, calc(100dvh - var(--bottom-bar-height) - env(safe-area-inset-bottom) - 28px));
+}
+
+@media (max-width: 760px) {
+    :root {
+        --bottom-bar-height: 48px;
+    }
+
+    .side-footer {
+        padding-inline: 16px;
+    }
+}
+
+@media (max-width: 390px) {
+    .side-footer {
+        padding-inline: 11px;
+        font-size: 7px;
+    }
+}
+
+main.has-result .reveal-panel {
+    bottom: calc(var(--bottom-bar-height) + env(safe-area-inset-bottom) + 24px);
+}
+
+.reveal-source-link,
+.reveal-source-unavailable {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 12px 0 0 35px;
+    color: var(--green-dark);
+    font: 500 9px var(--mono);
+    text-decoration: none;
+}
+
+.reveal-source-link:hover {
+    text-decoration: underline;
+}
+
+.reveal-source-unavailable {
+    color: var(--muted);
+}
+
+@media (max-width: 430px) {
+    .game-layout {
+        width: calc(100% - 24px);
+        margin-top: 8px;
+    }
+
+    .demo-notice {
+        gap: 7px;
+        margin-bottom: 8px;
+        padding: 6px 9px;
+        font-size: 9px;
+        line-height: 1.25;
+    }
+
+    .demo-symbol {
+        flex-basis: 15px;
+        height: 15px;
+    }
+
+    .challenge-panel {
+        padding: 16px 16px 18px;
+    }
+
+    .challenge-date {
+        font-size: 7px;
+    }
+
+    .proposition-label {
+        margin: 17px 0 6px;
+        font-size: 8px;
+    }
+
+    .proposition-title {
+        font-size: 27px;
+        line-height: 1.02;
+    }
+
+    .challenge-description {
+        margin-top: 8px;
+        font-size: 11px;
+        line-height: 1.35;
+    }
+
+    .answer-section {
+        margin-top: 16px;
+        padding-top: 11px;
+    }
+
+    .answer-section .answer-heading {
+        margin-bottom: 7px;
+    }
+
+    .answer-section .answer-heading .eyebrow {
+        font-size: 8px;
+    }
+
+    .answer-section .answer-count {
+        font-size: 8px;
+    }
+
+    .answer-section .answer-grid {
+        gap: 5px;
+    }
+
+    .answer-section .answer-option {
+        min-height: 53px;
+        gap: 8px;
+        padding: 6px 8px;
+    }
+
+    .answer-section .person-portrait--compact {
+        width: 30px;
+        height: 30px;
+        flex-basis: 30px;
+    }
+
+    .answer-section .option-copy {
+        gap: 2px;
+    }
+
+    .answer-section .option-copy strong {
+        font-size: 11px;
+    }
+
+    .answer-section .option-copy small {
+        font-size: 8px;
+    }
+
+    .answer-section .option-index {
+        font-size: 8px;
+    }
+}
+
+.scroll-proposition-copy {
+    opacity: var(--copy-opacity, 1);
+    translate: 0 var(--copy-offset, 0px);
+}
+
+.scroll-answer-option {
+    opacity: var(--choice-opacity, 1);
+    translate: 0 var(--choice-offset, 0px);
+}
+
 @media (prefers-reduced-motion: reduce) {
     .reveal-panel {
         animation: none;
+    }
+
+    .scroll-proposition-copy,
+    .scroll-answer-option {
+        translate: none;
+    }
+}
+
+.topbar {
+    position: fixed;
+    z-index: 20;
+    top: 0;
+    left: 0;
+    width: 100%;
+    gap: 20px;
+    height: 76px;
+    background: #f2f3edf2;
+    backdrop-filter: blur(14px);
+}
+
+.topbar-right {
+    gap: 16px;
+}
+
+.topbar-stats {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+}
+
+.topbar-stat {
+    position: relative;
+    min-width: 60px;
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: baseline;
+    column-gap: 5px;
+}
+
+.topbar-stat .eyebrow {
+    grid-column: 1 / -1;
+    font-size: 8px;
+}
+
+.topbar-stat>strong {
+    color: var(--ink);
+    font: 600 17px/1.2 var(--display);
+}
+
+.topbar-stat>strong small {
+    margin-left: 3px;
+    color: var(--muted);
+    font: 500 8px var(--mono);
+}
+
+.topbar-stat .is-urgent {
+    color: var(--coral);
+}
+
+.topbar-stat--timer {
+    min-width: 94px;
+}
+
+.topbar-timer-track {
+    width: 100%;
+    height: 3px;
+    grid-column: 1 / -1;
+    overflow: hidden;
+    margin-top: 4px;
+    background: #dce2d8;
+}
+
+.topbar-timer-track i {
+    display: block;
+    height: 100%;
+    background: var(--green);
+    transition: width .3s ease;
+}
+
+.topbar-stat--streak {
+    min-width: 68px;
+    grid-template-columns: 16px auto;
+    align-items: center;
+}
+
+.topbar-stat--streak svg {
+    grid-row: 1 / span 2;
+    color: #78834d;
+}
+
+.topbar-stat--streak .eyebrow {
+    grid-column: 2;
+}
+
+.topbar-stat--streak strong {
+    grid-column: 2;
+}
+
+.game-layout {
+    width: min(840px, calc(100% - 48px));
+    margin-top: 34px;
+}
+
+.app-shell {
+    padding-top: 76px;
+}
+
+.challenge-panel {
+    padding: clamp(24px, 5vw, 48px);
+}
+
+.answer-section {
+    position: relative;
+    z-index: 1;
+    margin-top: 34px;
+    padding-top: 20px;
+    border-top: 1px solid #ffffff3d;
+}
+
+.answer-section .answer-heading {
+    margin: 0 0 12px;
+}
+
+.answer-section .answer-heading .eyebrow {
+    color: #e2eee5;
+    font-size: 10px;
+}
+
+.answer-section .answer-count {
+    color: var(--lime);
+}
+
+.answer-section .answer-grid {
+    gap: 9px;
+}
+
+.answer-section .answer-option {
+    min-height: 74px;
+    border-color: #ffffff24;
+    background: #f8faf5;
+}
+
+.answer-section .answer-option:hover:not(:disabled) {
+    border-color: var(--lime);
+    background: white;
+}
+
+.answer-section .answer-option.is-correct,
+.answer-section .answer-option.is-correct:disabled {
+    border-color: #9dc7a6;
+    background: #dcefe0;
+    color: #204f37;
+    opacity: 1;
+}
+
+.answer-section .answer-option.is-wrong,
+.answer-section .answer-option.is-wrong:disabled {
+    border-color: #e1a291;
+    background: #f7e3dc;
+    color: #813d2f;
+    opacity: 1;
+}
+
+.answer-section .answer-option.is-locked:not(.is-correct):not(.is-wrong) {
+    opacity: .68;
+}
+
+.answer-section .answer-option.is-correct .option-result {
+    color: var(--green-dark);
+}
+
+.answer-section .answer-option.is-wrong .option-result {
+    color: #a64e39;
+}
+
+.game-meta {
+    margin-top: 16px;
+}
+
+@media (max-width: 760px) {
+    .topbar {
+        height: 68px;
+        gap: 8px;
+        padding-inline: 16px;
+    }
+
+    .app-shell {
+        padding-top: 68px;
+    }
+
+    .topbar-right {
+        min-width: 0;
+        gap: 10px;
+    }
+
+    .topbar-right>.edition-label,
+    .topbar-right>.topbar-divider,
+    .round-label {
+        display: none;
+    }
+
+    .topbar-stats {
+        gap: 12px;
+    }
+
+    .topbar-stat {
+        min-width: 42px;
+    }
+
+    .topbar-stat--timer {
+        min-width: 60px;
+    }
+
+    .topbar-stat--streak {
+        min-width: 43px;
+    }
+
+    .topbar-stat .eyebrow {
+        font-size: 7px;
+    }
+
+    .topbar-stat>strong {
+        font-size: 15px;
+    }
+
+    .game-layout {
+        width: min(100% - 32px, 600px);
+        margin-top: 18px;
+    }
+
+    .game-hud {
+        display: none;
+    }
+
+    .answer-section {
+        margin-top: 26px;
+        padding-top: 16px;
+    }
+
+    .answer-section .answer-option {
+        min-height: 66px;
+    }
+}
+
+@media (max-width: 390px) {
+    .topbar {
+        padding-inline: 11px;
+    }
+
+    .brand {
+        gap: 7px;
+        font-size: 15px;
+    }
+
+    .brand-mark {
+        width: 30px;
+        height: 30px;
+    }
+
+    .topbar-stats {
+        gap: 8px;
+    }
+
+    .topbar-stat--timer {
+        min-width: 50px;
+    }
+
+    .topbar-stat--streak {
+        min-width: 39px;
+        grid-template-columns: 13px auto;
+        column-gap: 3px;
+    }
+
+    .topbar-stat--streak svg {
+        width: 13px;
+    }
+
+    .proposition-label {
+        margin-top: 28px;
+    }
+
+    .answer-section .answer-heading .eyebrow {
+        font-size: 9px;
+    }
+}
+
+@media (max-width: 430px) {
+    .game-layout {
+        width: calc(100% - 24px);
+        margin: 8px auto 12px;
+    }
+
+    .demo-notice {
+        margin-bottom: 8px;
+        padding: 6px 9px;
+        font-size: 9px;
+        line-height: 1.25;
+    }
+
+    .challenge-panel {
+        padding: 14px 14px 16px;
+    }
+
+    .challenge-date {
+        font-size: 7px;
+    }
+
+    .proposition-label {
+        margin: 15px 0 5px;
+        font-size: 8px;
+    }
+
+    .proposition-title {
+        font-size: 26px;
+        line-height: 1.02;
+    }
+
+    .challenge-description {
+        margin-top: 7px;
+        font-size: 11px;
+        line-height: 1.3;
+    }
+
+    .answer-section {
+        margin-top: 14px;
+        padding-top: 10px;
+    }
+
+    .answer-section .answer-heading {
+        margin-bottom: 6px;
+    }
+
+    .answer-section .answer-heading .eyebrow,
+    .answer-section .answer-count {
+        font-size: 8px;
+    }
+
+    .answer-section .answer-grid {
+        gap: 5px;
+    }
+
+    .answer-section .answer-option {
+        min-height: 53px;
+        gap: 7px;
+        padding: 5px 8px;
+    }
+
+    .answer-section .person-portrait--compact {
+        width: 30px;
+        height: 30px;
+        flex-basis: 30px;
+    }
+
+    .answer-section .option-copy {
+        gap: 2px;
+    }
+
+    .answer-section .option-copy strong {
+        font-size: 11px;
+    }
+
+    .answer-section .option-copy small,
+    .answer-section .option-index {
+        font-size: 8px;
     }
 }
