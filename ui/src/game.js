@@ -32,6 +32,31 @@ export function scoreFor(secondsRemaining) {
     return 100 + Math.max(0, secondsRemaining) * 10;
 }
 
+export function getSocialLinks(person) {
+    if (!Array.isArray(person?.redes_sociais)) return [];
+
+    return person.redes_sociais.flatMap((value) => {
+        if (typeof value !== 'string') return [];
+
+        try {
+            const url = new URL(value);
+            if (!['http:', 'https:'].includes(url.protocol)) return [];
+
+            const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+            const label = hostname.includes('instagram.com') ? 'Instagram'
+                : hostname.includes('facebook.com') ? 'Facebook'
+                    : hostname === 'x.com' || hostname.includes('twitter.com') ? 'X'
+                        : hostname.includes('youtube.com') || hostname === 'youtu.be' ? 'YouTube'
+                            : hostname.includes('linkedin.com') ? 'LinkedIn'
+                                : hostname;
+
+            return [{ href: url.href, label }];
+        } catch {
+            return [];
+        }
+    });
+}
+
 export function makeRound(challenges, people, random = Math.random) {
     const validChallenges = challenges.filter((challenge) => challenge.parlamentar?.id);
     if (!validChallenges.length) return null;

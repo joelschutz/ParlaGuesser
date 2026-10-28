@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { demoChallenges, demoPeople, makeRound, mapRecordsToChallenges, prepareGameData, scoreFor } from './game.js';
+import { demoChallenges, demoPeople, getSocialLinks, makeRound, mapRecordsToChallenges, prepareGameData, scoreFor } from './game.js';
 
 test('score follows the round formula and never rewards negative time', () => {
     assert.equal(scoreFor(30), 400);
@@ -61,4 +61,20 @@ test('database records without usable challenge links fail clearly', () => {
         () => prepareGameData([{ id: 'orphan', parlamentar: 'missing' }], demoPeople),
         /desafios vinculados/,
     );
+});
+
+test('social link helper labels networks and rejects unsafe or malformed URLs', () => {
+    const links = getSocialLinks({
+        redes_sociais: [
+            'https://www.instagram.com/deputada/',
+            'https://twitter.com/deputado',
+            'javascript:alert(1)',
+            'not a URL',
+        ]
+    });
+
+    assert.deepEqual(links, [
+        { href: 'https://www.instagram.com/deputada/', label: 'Instagram' },
+        { href: 'https://twitter.com/deputado', label: 'X' },
+    ]);
 });

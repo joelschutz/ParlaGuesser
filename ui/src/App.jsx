@@ -12,6 +12,7 @@ import {
 import {
     demoChallenges,
     demoPeople,
+    getSocialLinks,
     makeRound,
     prepareGameData,
     ROUND_SECONDS,
@@ -168,6 +169,7 @@ export default function App() {
     const progress = (secondsLeft / ROUND_SECONDS) * 100;
     const resultCorrect = answered?.correct;
     const sourceUrl = round.challenge.url || round.challenge.fonte_url || round.correct.perfil_oficial_url;
+    const deputySocialLinks = getSocialLinks(round.correct);
     const eventDate = round.challenge.data_evento
         ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(round.challenge.data_evento))
         : 'Sem data registrada';
@@ -286,6 +288,7 @@ export default function App() {
                     </div>
                     <footer className="side-footer">
                         <span><span className="status-dot" /> {isLoading ? 'CONECTANDO' : isDemo ? 'MODO DEMO' : 'DADOS CONECTADOS'}</span>
+                        <a href="#about">ABOUT US <ArrowUpRight size={12} /></a>
                         <a href="https://dadosabertos.camara.leg.br/" target="_blank" rel="noreferrer">DADOS ABERTOS <ArrowUpRight size={12} /></a>
                     </footer>
                 </aside>
@@ -311,6 +314,16 @@ export default function App() {
                                 <span>{round.correct.casa || 'Congresso Nacional'}</span>
                             </div>
                         </div>
+                        {deputySocialLinks.length > 0 && (
+                            <nav className="deputy-social-links" aria-label={`Redes sociais de ${round.correct.nome_politico}`}>
+                                <span className="eyebrow">REDES</span>
+                                {deputySocialLinks.map((social) => (
+                                    <a key={social.href} href={social.href} target="_blank" rel="noopener noreferrer">
+                                        {social.label} <ArrowUpRight size={12} />
+                                    </a>
+                                ))}
+                            </nav>
+                        )}
                         <div className="reveal-source-links">
                             {sourceUrl ? (
                                 <a className="audit-button reveal-source-link" href={sourceUrl} target="_blank" rel="noreferrer">
