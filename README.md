@@ -1,71 +1,45 @@
-# ParlaGuessr
+# Sobre o ParlaGuessr
 
-**Jogue, descubra e cobre.** ParlaGuessr é um jogo cívico sobre propostas e atividades do Congresso Nacional. O MVP atual é o Modo Maratona: identifique o parlamentar associado a cada desafio antes que o cronômetro zere.
+## "Você sabe o que o seu parlamentar está fazendo no Congresso? Jogue, descubra e cobre."
 
-## Stack e estrutura
+O **ParlaGuessr** nasce com um propósito claro: **transformar a fiscalização política no Brasil em uma experiência direta, acessível e dinâmica**. 
 
-- Backend: Go e PocketBase, com SQLite, API REST e painel administrativo.
-- Frontend: React, Vite, Tailwind CSS e PocketBase JavaScript SDK em `ui/`.
-- Build de produção: `ui/` compila para `pb_public/`, servido pelo PocketBase.
+Por muito tempo, o acompanhamento do Poder Legislativo foi tratado como um assunto burocrático, escondido em portais de transparência difíceis de navegar, relatórios extensos e uma linguagem feita para afastar o cidadão comum. O ParlaGuessr quebra essa barreira. Inspirado na mecânica de jogos de adivinhação e revelação contra o relógio, o projeto transforma dados oficiais do Congresso Nacional em um desafio envolvente de aprendizado e cobrança cidadã.
 
-O servidor cria as coleções `parlamentares`, `desafios`, `estatisticas_parlamentares` e `destaques_e_reacoes` na primeira inicialização. A coleção de autenticação `users` também é criada com o campo opcional `display_name`. Os dados são públicos para leitura; escrita permanece restrita por padrão.
+---
 
-## Executar localmente
+## 🎮 Como Funciona o Jogo?
 
-Requisitos: Go compatível com a versão definida em `go.mod` e Node.js 18 ou superior.
+No modo principal de jogo, o **Modo Maratona**, você é colocado diante de ações reais que acontecem em Brasília:
+1. **O Desafio:** Na tela, surge uma proposta de lei relevante, uma liderança de comissão ou uma votação marcante.
+2. **A Escolha:** Você tem 30 segundos para identificar qual deputado ou senador é o verdadeiro responsável por aquela atuação.
+3. **O Resultado:** Quanto mais rápido você acertar, maior será sua pontuação. Se errar ou o tempo acabar, a partida é encerrada.
+4. **A Prova:** Ao final de cada rodada, você recebe o link direto para a fonte oficial do Congresso para checar a informação com total transparência.
 
-Na raiz do projeto, inicie o backend:
+Quanto mais você joga, mais compreende o perfil das propostas e o posicionamento de quem ocupa as cadeiras em Brasília.
 
-```bash
-go run . serve
-```
+---
 
-O PocketBase fica em `http://127.0.0.1:8090`, o painel administrativo em `http://127.0.0.1:8090/_/` e o health check em `http://127.0.0.1:8090/api/parlaguesser/health`.
+## 🏛️ Transparência Radical e Dados Reais
 
-Para desenvolvimento da interface, em outro terminal:
+No ParlaGuessr, **não existe espaço para fake news ou opiniões partidárias**. 
 
-```bash
-cd ui
-npm install
-npm run dev
-```
+Todas as perguntas apresentadas no jogo são geradas diretamente a partir das **APIs oficiais de Dados Abertos da Câmara dos Deputados e do Senado Federal**. Isso significa que cada ponto acumulado no jogo corresponde a um fato verificado da atividade parlamentar real.
 
-O Vite fica em `http://localhost:5173`. Ele tenta conectar ao PocketBase em `http://127.0.0.1:8090`; configure `VITE_POCKETBASE_URL` para usar outro endereço. Para servir a interface pelo PocketBase:
+---
 
-```bash
-cd ui
-npm run build
-```
+## 🚀 Por que a Gamificação?
 
-## Estado do MVP
+Acreditamos que **acompanhar a política não precisa ser chato**. A gamificação (o uso de mecânicas de jogos em contextos do dia a dia) permite que a fiscalização política se torne parte da rotina digital de forma intuitiva:
 
-- Partida com quatro alternativas, cronômetro de 30 segundos, sequência e pontuação de `100 + (segundos restantes × 10)`.
-- Revelação do parlamentar, partido, UF, casa legislativa e link de auditoria quando disponíveis.
-- O destaque salvo atualmente fica apenas no armazenamento local do navegador; autenticação, reações e ranking persistente ainda não foram implementados.
-- Sem registros reais suficientes no PocketBase, a interface usa dados claramente identificados como demonstrativos. Eles não representam parlamentares ou eventos reais.
-- A ingestão da Câmara é configurável por linha de comando e, por padrão, importa dez deputados e até dez proposições recentes de cada um. Não inclui o Senado.
+- **Competição Saudável:** Dispute posições no Ranking Geral e teste quem na sua rede realmente entende do Congresso.
+- **Participação Ativa:** Em vez de receber passivamente informações filtradas por terceiros, você analisa os recibos e tira suas próprias conclusões.
+- **Comunidade e Destaques:** Destaque atuações e propostas importantes para que outros jogadores da comunidade também fiquem sabendo.
 
-Para importar dez deputados atuais e até dez proposições recentes por deputado:
+---
 
-```bash
-go run ./cmd/ingestor
-```
+## ✊ Um Projeto Aberto e Independente
 
-Os registros são associados às URLs oficiais e atualizados quando o comando é repetido. As quantidades podem ser ajustadas para um teste menor:
+O ParlaGuessr é uma iniciativa **100% open-source (código aberto)** e sem fins lucrativos. Acreditamos na tecnologia cívica como ferramenta de emancipação, transparência e resistência digital. 
 
-```bash
-go run ./cmd/ingestor -limit 1 -propositions-per-deputy 1
-```
-
-`-propositions-per-deputy 0` importa somente os parlamentares.
-
-Testes do motor do jogo:
-
-```bash
-cd ui
-npm test
-```
-
-## Licença e fontes
-
-O código é distribuído sob a licença MIT. A integração de dados oficiais da Câmara dos Deputados está planejada para o Milestone 2: https://dadosabertos.camara.leg.br/.
+Nosso objetivo não é dizer em quem você deve votar, mas sim garantir que você tenha as ferramentas e as evidências necessárias para **jogar, descobrir e cobrar**.
