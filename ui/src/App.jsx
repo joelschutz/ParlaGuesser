@@ -13,7 +13,7 @@ import {
     demoChallenges,
     demoPeople,
     makeRound,
-    mapRecordsToChallenges,
+    prepareGameData,
     ROUND_SECONDS,
     scoreFor,
 } from './game.js';
@@ -45,6 +45,9 @@ export default function App() {
     const [challenges, setChallenges] = useState(demoChallenges);
     const [people, setPeople] = useState(demoPeople);
     const [isDemo, setIsDemo] = useState(true);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
+    const [loadAttempt, setLoadAttempt] = useState(0);
     const [round, setRound] = useState(() => makeRound(demoChallenges, demoPeople));
     const [roundNumber, setRoundNumber] = useState(1);
     const [secondsLeft, setSecondsLeft] = useState(ROUND_SECONDS);
@@ -55,31 +58,41 @@ export default function App() {
 
     useEffect(() => {
         let active = true;
+        setIsLoading(true);
+        setLoadError(false);
         Promise.all([
-            pocketBase.collection('desafios').getFullList({ sort: '-data_evento' }),
+            pocketBase.collection('desafios').getFullList({ sort: '-data_evento', expand: 'parlamentar' }),
             pocketBase.collection('parlamentares').getFullList({ sort: 'nome_politico' }),
         ])
             .then(([challengeRecords, peopleRecords]) => {
-                const mapped = mapRecordsToChallenges(challengeRecords, peopleRecords);
-                if (!active || mapped.length === 0 || peopleRecords.length < 4) return;
-                setPeople(peopleRecords);
-                setChallenges(mapped);
-                setRound(makeRound(mapped, peopleRecords));
+                const data = prepareGameData(challengeRecords, peopleRecords);
+                if (!active) return;
+                setPeople(data.people);
+                setChallenges(data.challenges);
+                setRound(data.round);
                 setIsDemo(false);
             })
             .catch(() => {
-                if (active) setIsDemo(true);
+                if (!active) return;
+                setPeople(demoPeople);
+                setChallenges(demoChallenges);
+                setRound(makeRound(demoChallenges, demoPeople));
+                setIsDemo(true);
+                setLoadError(true);
+            })
+            .finally(() => {
+                if (active) setIsLoading(false);
             });
         return () => {
             active = false;
         };
-    }, []);
+    }, [loadAttempt]);
 
     useEffect(() => {
-        if (answered || secondsLeft <= 0) return undefined;
+        if (isLoading || answered || secondsLeft <= 0) return undefined;
         const timer = window.setTimeout(() => setSecondsLeft((value) => value - 1), 1000);
         return () => window.clearTimeout(timer);
-    }, [answered, secondsLeft]);
+    }, [answered, isLoading, secondsLeft]);
 
     useEffect(() => {
         if (secondsLeft === 0 && !answered) {
@@ -154,7 +167,7 @@ export default function App() {
 
     const progress = (secondsLeft / ROUND_SECONDS) * 100;
     const resultCorrect = answered?.correct;
-    const sourceUrl = round.challenge.fonte_url || round.correct.perfil_oficial_url;
+    const sourceUrl = round.challenge.url || round.challenge.fonte_url || round.correct.perfil_oficial_url;
     const eventDate = round.challenge.data_evento
         ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(round.challenge.data_evento))
         : 'Sem data registrada';
@@ -195,7 +208,18 @@ export default function App() {
                     {isDemo && (
                         <div className="demo-notice" role="status">
                             <span className="demo-symbol">i</span>
-                            Modo demonstração: conteúdo ilustrativo, sem dados parlamentares reais.
+                            <span>
+                                {isLoading
+                                    ? 'Carregando desafios do PocketBase...'
+                                    : loadError
+                                        ? 'Não foi possível carregar o PocketBase. Exibindo conteúdo demonstrativo.'
+                                        : 'Modo demonstração: conteúdo ilustrativo, sem dados parlamentares reais.'}
+                            </span>
+                            {loadError && !isLoading && (
+                                <button className="demo-retry" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+                                    TENTAR NOVAMENTE
+                                </button>
+                            )}
                         </div>
                     )}
 
@@ -209,6 +233,14 @@ export default function App() {
                         <p className="challenge-description scroll-proposition-copy">
                             {round.challenge.descricao || 'Qual parlamentar está associado a esta iniciativa?'}
                         </p>
+                        {Array.isArray(round.challenge.keywords) && round.challenge.keywords.length > 0 && (
+                            <details className="proposition-keywords">
+                                <summary>PALAVRAS-CHAVE <span>{round.challenge.keywords.length}</span></summary>
+                                <ul>
+                                    {round.challenge.keywords.map((keyword) => <li key={keyword}>{keyword}</li>)}
+                                </ul>
+                            </details>
+                        )}
                         <span className="panel-index" aria-hidden="true">PG / 0{roundNumber}</span>
 
                         <div className="answer-section">
@@ -253,7 +285,7 @@ export default function App() {
                         <span className="quote-caption">JOGUE. DESCUBRA. COBRE.</span>
                     </div>
                     <footer className="side-footer">
-                        <span><span className="status-dot" /> {isDemo ? 'AMBIENTE DE TESTE' : 'DADOS CONECTADOS'}</span>
+                        <span><span className="status-dot" /> {isLoading ? 'CONECTANDO' : isDemo ? 'MODO DEMO' : 'DADOS CONECTADOS'}</span>
                         <a href="https://dadosabertos.camara.leg.br/" target="_blank" rel="noreferrer">DADOS ABERTOS <ArrowUpRight size={12} /></a>
                     </footer>
                 </aside>
@@ -279,13 +311,20 @@ export default function App() {
                                 <span>{round.correct.casa || 'Congresso Nacional'}</span>
                             </div>
                         </div>
-                        {sourceUrl ? (
-                            <a className="audit-button reveal-source-link" href={sourceUrl} target="_blank" rel="noreferrer">
-                                VER FONTE OFICIAL DA PROPOSIÇÃO <ArrowUpRight size={14} />
-                            </a>
-                        ) : (
-                            <span className="reveal-source-unavailable">FONTE OFICIAL INDISPONÍVEL</span>
-                        )}
+                        <div className="reveal-source-links">
+                            {sourceUrl ? (
+                                <a className="audit-button reveal-source-link" href={sourceUrl} target="_blank" rel="noreferrer">
+                                    FONTE OFICIAL <ArrowUpRight size={14} />
+                                </a>
+                            ) : (
+                                <span className="reveal-source-unavailable">FONTE INDISPONÍVEL</span>
+                            )}
+                            {round.challenge.urlInteiroTeor && (
+                                <a className="audit-button reveal-source-link" href={round.challenge.urlInteiroTeor} target="_blank" rel="noreferrer">
+                                    TEXTO INTEGRAL <ArrowUpRight size={14} />
+                                </a>
+                            )}
+                        </div>
                         <button className="next-button" onClick={nextRound}>
                             PRÓXIMO DESAFIO <ChevronRight size={17} />
                         </button>

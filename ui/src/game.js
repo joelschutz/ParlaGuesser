@@ -1,4 +1,4 @@
-export const ROUND_SECONDS = 30;
+export const ROUND_SECONDS = 90;
 
 export const demoPeople = [
     { id: 'demo-1', nome_politico: 'Perfil demonstrativo 01', partido: 'DEMO', uf: '--' },
@@ -69,7 +69,19 @@ export function mapRecordsToChallenges(records, people) {
     return records
         .map((record) => ({
             ...record,
+            url: record.url || record.fonte_url || '',
             parlamentar: record.expand?.parlamentar ?? peopleById.get(record.parlamentar),
         }))
         .filter((record) => record.parlamentar);
+}
+
+export function prepareGameData(challengeRecords, people) {
+    const challenges = mapRecordsToChallenges(challengeRecords, people);
+    const round = makeRound(challenges, people);
+
+    if (!round) {
+        throw new Error('O PocketBase não tem desafios vinculados a parlamentares suficientes para iniciar uma rodada.');
+    }
+
+    return { challenges, people, round };
 }

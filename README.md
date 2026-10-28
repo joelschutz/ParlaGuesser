@@ -43,7 +43,21 @@ npm run build
 - Revelação do parlamentar, partido, UF, casa legislativa e link de auditoria quando disponíveis.
 - O destaque salvo atualmente fica apenas no armazenamento local do navegador; autenticação, reações e ranking persistente ainda não foram implementados.
 - Sem registros reais suficientes no PocketBase, a interface usa dados claramente identificados como demonstrativos. Eles não representam parlamentares ou eventos reais.
-- O Milestone 2 (ingestão de dados) foi intencionalmente deixado de fora. A partida só usa dados reais depois que os registros forem inseridos manualmente ou por uma etapa futura de ingestão.
+- A ingestão da Câmara é configurável por linha de comando e, por padrão, importa dez deputados e até dez proposições recentes de cada um. Não inclui o Senado.
+
+Para importar dez deputados atuais e até dez proposições recentes por deputado:
+
+```bash
+go run ./cmd/ingestor
+```
+
+Os registros são associados às URLs oficiais e atualizados quando o comando é repetido. As quantidades podem ser ajustadas para um teste menor:
+
+```bash
+go run ./cmd/ingestor -limit 1 -propositions-per-deputy 1
+```
+
+`-propositions-per-deputy 0` importa somente os parlamentares.
 
 Testes do motor do jogo:
 
