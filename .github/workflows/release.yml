@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            asset_name: parlaguesser-linux-amd64
+          - goos: linux
+            goarch: arm64
+            asset_name: parlaguesser-linux-arm64
+          - goos: darwin
+            goarch: amd64
+            asset_name: parlaguesser-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            asset_name: parlaguesser-darwin-arm64
+          - goos: windows
+            goarch: amd64
+            asset_name: parlaguesser-windows-amd64.exe
+          - goos: windows
+            goarch: arm64
+            asset_name: parlaguesser-windows-arm64.exe
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix ui ci
+
+      - name: Build frontend assets
+        run: npm --prefix ui run build
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: true
+
+      - name: Build release binary
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags='-s -w' -o "dist/${{ matrix.asset_name }}" .
+
+      - name: Package binary
+        shell: bash
+        run: |
+          cd dist
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            zip "${{ matrix.asset_name }}.zip" "${{ matrix.asset_name }}"
+          else
+            tar -czf "${{ matrix.asset_name }}.tar.gz" "${{ matrix.asset_name }}"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: dist/*
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
