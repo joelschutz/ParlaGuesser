@@ -1,9 +1,10 @@
 package main
 
 import (
+	"embed"
+	"io/fs"
 	"log"
 	"net/http"
-	"os"
 
 	"parlaguesser/internal/schema"
 
@@ -12,7 +13,15 @@ import (
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 )
 
+//go:embed pb_public
+var embeddedPublic embed.FS
+
 func main() {
+	publicFS, err := fs.Sub(embeddedPublic, "pb_public")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	app := pocketbase.New()
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
@@ -28,7 +37,7 @@ func main() {
 			})
 		})
 
-		e.Router.GET("/{path...}", apis.Static(os.DirFS("./pb_public"), false))
+		e.Router.GET("/{path...}", apis.Static(publicFS, false))
 		return e.Next()
 	})
 
