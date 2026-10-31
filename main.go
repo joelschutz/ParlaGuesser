@@ -3,10 +3,12 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"parlaguesser/internal/schema"
 
 	"ganigeorgiev.com/pocketbase/pocketbase"
+	"ganigeorgiev.com/pocketbase/pocketbase/apis"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"ganigeorgiev.com/pocketbase/pocketbase/plugins/migratecmd"
 )
@@ -33,6 +35,7 @@ func main() {
 				"version": "0.1.0",
 			})
 		})
+		e.Router.GET("/{path...}", apis.Static(os.DirFS("./pb_public"), false))
 
 		return e.Next()
 	})

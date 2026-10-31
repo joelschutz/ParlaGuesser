@@ -1,6 +1,6 @@
-# Guia de Deploy e Hospedagem Desacoplada (PocketBase Cloud & Frontend Estático)
+# Guia de Deploy (PocketBase Cloud e hospedagem estática)
 
-Este documento orienta o processo de implantação do ecossistema **ParlaGuessr** de forma desacoplada, separando o backend de dados (PocketBase) da interface de usuário estática (React SPA).
+O ParlaGuessr pode ser publicado como uma aplicação PocketBase única ou com a interface hospedada separadamente. Para PocketBase Cloud, o projeto precisa conter a estrutura PocketBase no diretório raiz: `pb_hooks/`, `pb_migrations/` e `pb_public/`.
 
 ---
 
@@ -8,14 +8,10 @@ Este documento orienta o processo de implantação do ecossistema **ParlaGuessr*
 
 ```mermaid
 flowchart LR
-    subgraph FrontendHosting["Frontend Estático"]
-        GH["GitHub Pages / Vercel / Cloudflare Pages"]
-        Assets["Assets Estáticos (HTML, JS, CSS)<br/>ui/dist/"]
-    end
-
-    subgraph BackendHosting["PocketBase Cloud / Backend"]
-        Cloud["PocketHost.io ou Container (Fly.io/Railway/Docker)"]
+    subgraph BackendHosting["PocketBase Cloud"]
+      Cloud["PocketBase Cloud"]
         API["PocketBase REST API & Admin<br/>/api/collections/..."]
+      Assets["Frontend React estático<br/>pb_public/"]
         DB[("SQLite WAL")]
     end
 
@@ -23,8 +19,8 @@ flowchart LR
         IngestCLI["CLI Ingestor<br/>cmd/ingestor"]
     end
 
-    GH --> Assets
-    Assets -->|HTTP/REST com CORS| API
+    Cloud --> Assets
+    Assets -->|mesma origem| API
     API --> DB
     IngestCLI -->|Câmara API v2| IngestCLI
     IngestCLI -->|REST Upsert (Admin Auth)| API
@@ -32,38 +28,25 @@ flowchart LR
 
 ---
 
-## 2. Hospedando o Backend no PocketBase Cloud
+## 2. Deploy no PocketBase Cloud
 
-Existem duas formas principais de hospedar o backend do ParlaGuessr na nuvem:
+O build de produção coloca a interface compilada em `pb_public/`; PocketBase serve esses arquivos junto com a API. Os diretórios `pb_hooks/` e `pb_migrations/` são mantidos no repositório, mesmo quando ainda não há hooks ou migrações customizados.
 
-### Opção A: PocketHost.io (PaaS gerenciado para PocketBase)
+Use o script compartilhado para reproduzir localmente o mesmo build validado pelo CI:
 
-1. Crie uma conta em [pockethost.io](https://pockethost.io) e crie um novo projeto (ex: `parlaguesser.pockethost.io`).
-2. Acesse o painel de administração da sua instância:
-   `https://parlaguesser.pockethost.io/_/`
-3. Defina seu login e senha de superusuário (Admin).
-4. No menu lateral, acesse **Settings > Sync / Import collections**.
-5. Abra o arquivo [`pb_schema.json`](file:///home/joels/Documentos/Code/ParlaGuesser/pb_schema.json) deste repositório, copie o conteúdo e cole no formulário de importação (ou faça o upload do arquivo).
-6. Clique em **Review** e depois em **Confirm and import**.
-   - As coleções `parlamentares`, `desafios`, `estatisticas_parlamentares` e `destaques_e_reacoes` serão criadas instantaneamente com as regras de leitura pública ativadas.
-
-### Opção B: Docker / Cloud Containers (Fly.io, Railway, Render)
-
-O repositório inclui um [`Dockerfile`](file:///home/joels/Documentos/Code/ParlaGuesser/Dockerfile) multi-stage otimizado.
-
-#### Deploy no Fly.io:
 ```bash
-fly launch
-fly volumes create pb_data --size 1
-fly deploy
+bash scripts/build-pocketbase-cloud.sh
 ```
 
-#### Deploy no Railway / Render:
-- Conecte o repositório Git.
-- Configure o build a partir do `Dockerfile`.
-- Crie um volume persistente montado em `/app/pb_data`.
-- A aplicação escutará na porta 8090 (ou na porta definida por `$PORT`).
-- Na primeira inicialização, o código Go executa automaticamente o `schema.EnsureCollections`, provisionando as tabelas e regras sem necessidade de importação manual.
+O script executa os testes Go e frontend, compila o Vite para `pb_public/` e verifica a presença de `pb_hooks/`, `pb_migrations/` e `pb_public/index.html`. Configure o PocketBase Cloud para usar a raiz do repositório. Se a configuração pedir um comando de build, use `bash scripts/build-pocketbase-cloud.sh`; não configure `ui/` como raiz do projeto PocketBase.
+
+O workflow de release (`.github/workflows/release.yml`) publica `parlaguesser-pocketbase-cloud.zip`, incluindo o código Go, os módulos e os três diretórios PocketBase. Baixe e extraia esse bundle preservando a estrutura de diretórios quando fizer deploy manual.
+
+As coleções de domínio são inicializadas pelo código Go através de `schema.EnsureCollections`. O `pb_schema.json` também está disponível para inspeção e importação manual quando necessário.
+
+### Deploy em container
+
+O repositório também inclui um [`Dockerfile`](../Dockerfile) para hosts que executam containers. Monte um volume persistente em `/app/pb_data`; o container escuta em `8090` por padrão.
 
 ---
 
@@ -89,9 +72,9 @@ go run ./cmd/ingestor \
 
 ---
 
-## 4. Hospedando o Frontend em uma Página Estática
+## 3. Hospedagem estática separada (opcional)
 
-O frontend foi desacoplado e compilado em assets estáticos independentes em `ui/dist/`.
+O build do Vite grava os arquivos em `pb_public/`, que é o diretório padrão de arquivos públicos do PocketBase. Se quiser hospedar a interface em outro serviço estático, publique o conteúdo de `pb_public/` após o build.
 
 ### Configuração da URL da API Remota
 
@@ -101,32 +84,33 @@ A interface resolve a URL do backend na seguinte ordem de prioridade:
 3. Variável de build `VITE_POCKETBASE_URL`
 4. Fallback padrão: `http://127.0.0.1:8090`
 
-### Build para Produção com URL do Backend:
+### Build para Produção
+
+Na raiz do repositório:
+
 ```bash
-cd ui
-npm install
-VITE_POCKETBASE_URL=https://parlaguesser.pockethost.io npm run build
+bash scripts/build-pocketbase-cloud.sh
 ```
-Os arquivos gerados em `ui/dist/` estão prontos para publicação em qualquer servidor web ou CDN estático.
+Para hospedar fora do domínio PocketBase, defina `VITE_POCKETBASE_URL` para a URL HTTPS da API durante o build. Os arquivos publicados em `pb_public/` são gerados novamente a cada build.
 
 ---
 
 ### Provedores Recomendados de Hospedagem Estática
 
 #### 1. GitHub Pages
-- O arquivo `ui/vite.config.js` está configurado com `base: './'`, permitindo hospedar em repositórios com subcaminhos (ex: `https://usuario.github.io/ParlaGuesser/`).
-- No GitHub, acesse **Settings > Pages** e selecione a fonte como **GitHub Actions** ou aponte para a branch de build.
+- O Vite está configurado com `base: './'`, permitindo publicar sob um subcaminho.
+- Use um workflow de Pages para publicar o conteúdo de `pb_public/`.
 
 #### 2. Cloudflare Pages / Vercel / Netlify
-- Diretório raiz: `ui`
-- Comando de build: `npm run build`
-- Diretório de saída: `dist`
+- Diretório raiz: repositório
+- Comando de build: `npm --prefix ui ci && npm --prefix ui run build`
+- Diretório de saída: `pb_public`
 - Variáveis de ambiente:
   - `VITE_POCKETBASE_URL`: `https://parlaguesser.pockethost.io`
 
 ---
 
-## 5. Teste Local do Ecossistema Desacoplado
+## 4. Teste Local
 
 Para testar localmente simulando o desacoplamento:
 
@@ -141,4 +125,4 @@ cd ui
 VITE_POCKETBASE_URL=http://127.0.0.1:8090 npm run dev
 ```
 
-Acesse `http://localhost:5173` no navegador. O frontend consome a API do backend local e apresenta `DADOS CONECTADOS` no rodapé.
+Acesse `http://localhost:5173` no navegador. Para testar o diretório público servido pelo PocketBase, execute o build e acesse `http://127.0.0.1:8090`.

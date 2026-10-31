@@ -78,7 +78,7 @@ jobs:
           files: dist/*
 
   release-frontend:
-    name: Frontend Static Bundle
+    name: PocketBase Cloud Bundle
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -91,27 +91,36 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
-      - name: Install frontend dependencies
-        run: npm --prefix ui ci
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
-      - name: Build frontend assets
-        run: npm --prefix ui run build
+      - name: Build and verify PocketBase Cloud project
+        run: bash scripts/build-pocketbase-cloud.sh
 
-      - name: Package static bundle
+      - name: Verify PocketBase deployment structure
+        run: |
+          test -d pb_hooks
+          test -d pb_migrations
+          test -f pb_public/index.html
+
+      - name: Package PocketBase Cloud bundle
         shell: bash
         run: |
           mkdir -p dist
-          cd ui/dist
-          zip -r ../../dist/parlaguesser-frontend-static.zip .
+          zip -r dist/parlaguesser-pocketbase-cloud.zip \
+            main.go go.mod go.sum internal cmd pb_hooks pb_migrations pb_public pb_schema.json
 
-      - name: Upload frontend artifact
+      - name: Upload PocketBase Cloud artifact
         uses: actions/upload-artifact@v4
         with:
-          name: parlaguesser-frontend-static
-          path: dist/parlaguesser-frontend-static.zip
+          name: parlaguesser-pocketbase-cloud
+          path: dist/parlaguesser-pocketbase-cloud.zip
 
-      - name: Publish frontend to GitHub Release
+      - name: Publish PocketBase Cloud bundle
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/parlaguesser-frontend-static.zip
+          files: dist/parlaguesser-pocketbase-cloud.zip

@@ -1,11 +1,10 @@
 # PocketBase local database and logs
 /pb_data/
-/pb_public/
 *.log
 
 # Frontend build and dependencies
 /ui/node_modules/
-/ui/dist/
+ui/dist/
 ui/.env.local
 ui/.env.*.local
 
