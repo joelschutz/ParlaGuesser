@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -93,10 +94,10 @@ func main() {
 	limit := flag.Int("limit", 50, "number of current deputies to import")
 	propsPerDeputy := flag.Int("propositions-per-deputy", 10, "recent authored propositions per deputy")
 	baseURL := flag.String("api", defaultAPIBase, "Chamber Open Data API v2 base URL")
-	remoteURL := flag.String("remote-url", "", "remote PocketBase base URL (e.g. https://your-instance.pockethost.io)")
-	adminEmail := flag.String("admin-email", "", "PocketBase admin/superuser email for remote ingestion")
-	adminPassword := flag.String("admin-password", "", "PocketBase admin/superuser password for remote ingestion")
-	adminToken := flag.String("admin-token", "", "PocketBase admin auth token for remote ingestion")
+	remoteURL := flag.String("remote-url", os.Getenv("PB_REMOTE_URL"), "remote PocketBase base URL (e.g. https://your-instance.pockethost.io, or env PB_REMOTE_URL)")
+	adminEmail := flag.String("admin-email", os.Getenv("PB_ADMIN_EMAIL"), "PocketBase admin/superuser email for remote ingestion (or env PB_ADMIN_EMAIL)")
+	adminPassword := flag.String("admin-password", os.Getenv("PB_ADMIN_PASSWORD"), "PocketBase admin/superuser password for remote ingestion (or env PB_ADMIN_PASSWORD)")
+	adminToken := flag.String("admin-token", os.Getenv("PB_ADMIN_TOKEN"), "PocketBase admin auth token for remote ingestion (or env PB_ADMIN_TOKEN)")
 	flag.Parse()
 
 	ctx := context.Background()
