@@ -12,7 +12,7 @@ Por muito tempo, o acompanhamento do Poder Legislativo foi tratado como um assun
 
 No modo principal de jogo, o **Modo Maratona**, você é colocado diante de ações reais que acontecem em Brasília:
 1. **O Desafio:** Na tela, surge uma proposta de lei relevante, uma liderança de comissão ou uma votação marcante.
-2. **A Escolha:** Você tem 30 segundos para identificar qual deputado ou senador é o verdadeiro responsável por aquela atuação.
+2. **A Escolha:** Você tem um tempo limite para identificar qual deputado ou senador é o verdadeiro responsável por aquela atuação.
 3. **O Resultado:** Quanto mais rápido você acertar, maior será sua pontuação. Se errar ou o tempo acabar, a partida é encerrada.
 4. **A Prova:** Ao final de cada rodada, você recebe o link direto para a fonte oficial do Congresso para checar a informação com total transparência.
 
@@ -46,9 +46,54 @@ Nosso objetivo não é dizer em quem você deve votar, mas sim garantir que voc�
 
 ---
 
-## 🔨 Build local e execução
+## 🧪 Teste Local e Desenvolvimento
 
-Para compilar a interface web e rodar a aplicação localmente:
+Para rodar o projeto em um ambiente de desenvolvimento local, você precisa do Go e do Node.js instalados:
+
+### 1) Iniciar o PocketBase
+
+Na raiz do projeto:
+
+```bash
+go run . serve
+```
+
+Isso inicia o servidor PocketBase em `http://127.0.0.1:8090` usando os dados locais em `pb_data/`.
+
+### 2) Iniciar a interface em modo de desenvolvimento
+
+Entre na pasta da interface:
+
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+O Vite normalmente fica disponível em `http://localhost:5173`.
+
+### 3) Importar dados de teste
+
+Para repopular os dados com parlamentares e propostas da Câmara:
+
+```bash
+go run ./cmd/ingestor
+```
+
+Esse comando busca dados do Portal de Dados Abertos da Câmara e grava registros de deputados, desafios e estatísticas no PocketBase.
+
+### 4) Verificar o estado e testes
+
+- `http://127.0.0.1:8090/_/` para o painel administrativo do PocketBase
+- `http://localhost:5173` para a interface do jogo em desenvolvimento
+- `go test ./...` para validar os testes do backend
+- `cd ui && npm test` para validar os testes da interface
+
+---
+
+## 🔨 Build local e execução (Produção)
+
+Para compilar a interface web estática e rodar o servidor embutido localmente:
 
 ```bash
 cd ui
@@ -64,7 +109,9 @@ Em seguida, abra o navegador em:
 http://localhost:8090
 ```
 
-A aplicação usa o PocketBase em segundo plano e serve a interface embutida no binário. O diretório `pb_data` será criado automaticamente ao iniciar a aplicação.
+A aplicação PocketBase serve a interface web embutida diretamente no binário. O diretório `pb_data` será criado automaticamente se ainda não existir.
+
+---
 
 ## 🧩 Executando os binários gerados
 
@@ -80,10 +127,43 @@ Exemplo:
 ./parlaguesser-linux-amd64
 ```
 
-Depois, abra:
+Depois, abra `http://localhost:8090` no navegador.
 
-```text
-http://localhost:8090
+---
+
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas. O projeto funciona melhor quando a comunidade ajuda a melhorar a coleta, a lógica do jogo, a clareza da interface e a qualidade dos dados.
+
+### Fluxo sugerido
+
+1. Crie uma branch para a sua mudança:
+
+```bash
+git checkout -b feature/minha-melhoria
 ```
 
-Use o app normalmente como um jogo local. O binário gerado não precisa de instalação adicional e já serve a interface pronta em seu computador.
+2. Faça as mudanças e mantenha o código consistente com o padrão atual do projeto.
+3. Execute os testes relevantes antes de abrir o PR:
+
+```bash
+go test ./...
+cd ui && npm test
+```
+
+4. Abra um pull request com uma descrição clara do problema resolvido e do impacto esperado.
+
+### Áreas que ajudam muito
+
+- Melhoria da lógica de match entre proposta e parlamentar
+- Ajustes na interface, UX e acessibilidade
+- Limpeza e expansão dos dados importados (ex: integração do Senado)
+- Documentação e exemplos de uso
+- Validação de fontes oficiais e casos de borda
+
+### Regras simples
+
+- Prefira mudanças pequenas e focadas
+- Mantenha a linguagem e a UX em português
+- Sempre verifique como a mudança afeta os dados oficiais e a experiência da partida
+- Se a alteração mexer em dados importados, documente a origem e a forma de validação
