@@ -1,34 +1,31 @@
 package main
 
 import (
-	"embed"
-	"io/fs"
 	"log"
 	"net/http"
 
 	"parlaguesser/internal/schema"
 
 	"ganigeorgiev.com/pocketbase/pocketbase"
-	"ganigeorgiev.com/pocketbase/pocketbase/apis"
 	"ganigeorgiev.com/pocketbase/pocketbase/core"
+	"ganigeorgiev.com/pocketbase/pocketbase/plugins/migratecmd"
 )
 
-//go:embed pb_public
-var embeddedPublic embed.FS
-
 func main() {
-	publicFS, err := fs.Sub(embeddedPublic, "pb_public")
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	app := pocketbase.New()
 
+	// Register migration commands (e.g. migrate up/down/create/history) and auto-apply migrations on serve
+	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
+		Automigrate: true,
+	})
+
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
+		// Ensure system and domain collections exist on startup
 		if err := schema.EnsureCollections(e.App); err != nil {
 			return err
 		}
 
+		// API healthcheck endpoint
 		e.Router.GET("/api/parlaguesser/health", func(event *core.RequestEvent) error {
 			return event.JSON(http.StatusOK, map[string]string{
 				"status":  "ok",
@@ -37,7 +34,6 @@ func main() {
 			})
 		})
 
-		e.Router.GET("/{path...}", apis.Static(publicFS, false))
 		return e.Next()
 	})
 

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import PocketBase from 'pocketbase';
 import {
     ArrowUpRight,
     Bookmark,
@@ -18,9 +17,7 @@ import {
     ROUND_SECONDS,
     scoreFor,
 } from './game.js';
-
-const pocketBaseUrl = import.meta.env.VITE_POCKETBASE_URL || 'http://127.0.0.1:8090';
-const pocketBase = new PocketBase(pocketBaseUrl);
+import { pocketBase, pocketBaseUrl } from './pocketbase.js';
 
 function initials(name = '') {
     return name

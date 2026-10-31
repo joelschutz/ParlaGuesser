@@ -1,6 +1,19 @@
+# PocketBase local database and logs
 /pb_data/
-/pb_public/assets/
+/pb_public/
+*.log
+
+# Frontend build and dependencies
 /ui/node_modules/
 /ui/dist/
-*.log
+ui/.env.local
+ui/.env.*.local
+
+# Backend binary builds
+/dist/
+parlaguesser
+
+# OS and Editor files
 .DS_Store
+.idea/
+.vscode/

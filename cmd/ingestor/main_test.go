@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -108,5 +110,41 @@ func TestListPropositionsSkipsNonPLResponses(t *testing.T) {
 		if item.Type != "PL" {
 			t.Errorf("returned non-PL proposition type %q", item.Type)
 		}
+	}
+}
+
+func TestRemoteStoreUpsertDeputy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(request.URL.Path, "/auth-with-password"):
+			_ = json.NewEncoder(writer).Encode(map[string]string{"token": "test-token-xyz"})
+		case request.Method == http.MethodGet && strings.Contains(request.URL.Path, "/parlamentares/records"):
+			// Return empty list so it creates a new record
+			_, _ = writer.Write([]byte(`{"items":[]}`))
+		case request.Method == http.MethodPost && strings.Contains(request.URL.Path, "/parlamentares/records"):
+			if request.Header.Get("Authorization") != "test-token-xyz" {
+				t.Errorf("expected auth token, got %q", request.Header.Get("Authorization"))
+			}
+			_, _ = writer.Write([]byte(`{"id":"created-rec-123"}`))
+		default:
+			t.Errorf("unhandled request: %s %s", request.Method, request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	store, err := newRemoteStore(context.Background(), server.URL, "admin@example.com", "secret123", "")
+	if err != nil {
+		t.Fatalf("newRemoteStore: %v", err)
+	}
+
+	deputy := deputyListItem{ID: 10, URI: "https://example.test/dep/10", Name: "Fulano"}
+	detail := deputyDetail{CivilName: "Fulano de Tal"}
+	id, err := store.upsertDeputy(context.Background(), deputy, detail)
+	if err != nil {
+		t.Fatalf("upsertDeputy: %v", err)
+	}
+	if id != "created-rec-123" {
+		t.Errorf("id = %q, want created-rec-123", id)
 	}
 }

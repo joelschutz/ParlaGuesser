@@ -91,43 +91,43 @@ Esse comando busca dados do Portal de Dados Abertos da Câmara e grava registros
 
 ---
 
-## 🔨 Build local e execução (Produção)
+## 🔨 Arquitetura Desacoplada e Produção
 
-Para compilar a interface web estática e rodar o servidor embutido localmente:
+O projeto é desacoplado entre uma **API de dados em Go/PocketBase** e uma **Interface Web Estática (SPA em React)**:
+
+### Frontend Estático (`ui/`)
+Compilado de forma independente para publicação em qualquer hospedagem estática (GitHub Pages, Vercel, Cloudflare Pages, Netlify):
 
 ```bash
 cd ui
 npm install
-npm run build
-cd ..
-go run .
+VITE_POCKETBASE_URL=https://sua-instancia.pockethost.io npm run build
 ```
+Os arquivos gerados em `ui/dist` podem ser hospedados estaticamente.
 
-Em seguida, abra o navegador em:
+### Backend PocketBase Cloud / Servidor
+O backend Go é compilado como um servidor de API independente ou implantado diretamente via container / PocketBase Cloud:
 
-```text
-http://localhost:8090
-```
+- **PocketBase Cloud / PocketHost:** Importe o schema [`pb_schema.json`](file:///home/joels/Documentos/Code/ParlaGuesser/pb_schema.json) no painel administrativo para configurar as coleções e regras em 1 clique.
+- **Docker / Cloud Containers:** Utilize o [`Dockerfile`](file:///home/joels/Documentos/Code/ParlaGuesser/Dockerfile) para deploy em Fly.io, Railway ou Render.
+- **Ingestão Remota:** Alimenta o banco na nuvem executando:
+  ```bash
+  go run ./cmd/ingestor -remote-url https://sua-instancia.pockethost.io -admin-email admin@exemplo.com -admin-password segredo
+  ```
 
-A aplicação PocketBase serve a interface web embutida diretamente no binário. O diretório `pb_data` será criado automaticamente se ainda não existir.
+Para o guia passo a passo completo de implantação, consulte o [Guia de Deploy (docs/DEPLOYMENT.md)](file:///home/joels/Documentos/Code/ParlaGuesser/docs/DEPLOYMENT.md).
 
 ---
 
-## 🧩 Executando os binários gerados
+## 🧩 Executando os binários do Backend
 
-Os binários de release são construídos para desktop e incluem tanto o frontend quanto o backend no mesmo arquivo.
+Os binários compilados servem a API e o painel administrativo do PocketBase:
 
-- Linux: `./parlaguesser-linux-amd64`
-- macOS: `./parlaguesser-darwin-arm64` (ou `-amd64`)
-- Windows: `parlaguesser-windows-amd64.exe`
+- Linux: `./parlaguesser-backend-linux-amd64 serve`
+- macOS: `./parlaguesser-backend-darwin-arm64 serve` (ou `-amd64`)
+- Windows: `parlaguesser-backend-windows-amd64.exe serve`
 
-Exemplo:
-
-```bash
-./parlaguesser-linux-amd64
-```
-
-Depois, abra `http://localhost:8090` no navegador.
+Acesse `http://localhost:8090/_/` para gerenciar a instância localmente.
 
 ---
 
