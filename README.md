@@ -12,7 +12,7 @@ Por muito tempo, o acompanhamento do Poder Legislativo foi tratado como um assun
 
 No modo principal de jogo, o **Modo Maratona**, você é colocado diante de ações reais que acontecem em Brasília:
 1. **O Desafio:** Na tela, surge uma proposta de lei relevante, uma liderança de comissão ou uma votação marcante.
-2. **A Escolha:** Você tem 30 segundos para identificar qual deputado ou senador é o verdadeiro responsável por aquela atuação.
+2. **A Escolha:** Você tem um tempo limite para identificar qual deputado ou senador é o verdadeiro responsável por aquela atuação.
 3. **O Resultado:** Quanto mais rápido você acertar, maior será sua pontuação. Se errar ou o tempo acabar, a partida é encerrada.
 4. **A Prova:** Ao final de cada rodada, você recebe o link direto para a fonte oficial do Congresso para checar a informação com total transparência.
 
@@ -46,44 +46,124 @@ Nosso objetivo não é dizer em quem você deve votar, mas sim garantir que voc�
 
 ---
 
-## 🔨 Build local e execução
+## 🧪 Teste Local e Desenvolvimento
 
-Para compilar a interface web e rodar a aplicação localmente:
+Para rodar o projeto em um ambiente de desenvolvimento local, você precisa do Go e do Node.js instalados:
+
+### 1) Iniciar o PocketBase
+
+Na raiz do projeto:
+
+```bash
+go run . serve
+```
+
+Isso inicia o servidor PocketBase em `http://127.0.0.1:8090` usando os dados locais em `pb_data/`.
+
+### 2) Iniciar a interface em modo de desenvolvimento
+
+Entre na pasta da interface:
 
 ```bash
 cd ui
 npm install
-npm run build
-cd ..
-go run .
+npm run dev
 ```
 
-Em seguida, abra o navegador em:
+O Vite normalmente fica disponível em `http://localhost:5173`.
 
-```text
-http://localhost:8090
-```
+### 3) Importar dados de teste
 
-A aplicação usa o PocketBase em segundo plano e serve a interface embutida no binário. O diretório `pb_data` será criado automaticamente ao iniciar a aplicação.
-
-## 🧩 Executando os binários gerados
-
-Os binários de release são construídos para desktop e incluem tanto o frontend quanto o backend no mesmo arquivo.
-
-- Linux: `./parlaguesser-linux-amd64`
-- macOS: `./parlaguesser-darwin-arm64` (ou `-amd64`)
-- Windows: `parlaguesser-windows-amd64.exe`
-
-Exemplo:
+Para repopular os dados com parlamentares e propostas da Câmara:
 
 ```bash
-./parlaguesser-linux-amd64
+go run ./cmd/ingestor
 ```
 
-Depois, abra:
+Esse comando busca dados do Portal de Dados Abertos da Câmara e grava registros de deputados, desafios e estatísticas no PocketBase.
 
-```text
-http://localhost:8090
+### 4) Verificar o estado e testes
+
+- `http://127.0.0.1:8090/_/` para o painel administrativo do PocketBase
+- `http://localhost:5173` para a interface do jogo em desenvolvimento
+- `go test ./...` para validar os testes do backend
+- `cd ui && npm test` para validar os testes da interface
+
+---
+
+## 🔨 Arquitetura Desacoplada e Produção
+
+O projeto é desacoplado entre uma **API de dados em Go/PocketBase** e uma **Interface Web Estática (SPA em React)**:
+
+### Frontend Estático (`ui/`)
+Compilado de forma independente para publicação em qualquer hospedagem estática (GitHub Pages, Vercel, Cloudflare Pages, Netlify):
+
+```bash
+cd ui
+npm install
+VITE_POCKETBASE_URL=https://sua-instancia.pockethost.io npm run build
+```
+Os arquivos gerados em `ui/dist` podem ser hospedados estaticamente.
+
+### Backend PocketBase Cloud / Servidor
+O backend Go é compilado como um servidor de API independente ou implantado diretamente via container / PocketBase Cloud:
+
+- **PocketBase Cloud / PocketHost:** Importe o schema [`pb_schema.json`](file:///home/joels/Documentos/Code/ParlaGuesser/pb_schema.json) no painel administrativo para configurar as coleções e regras em 1 clique.
+- **Docker / Cloud Containers:** Utilize o [`Dockerfile`](file:///home/joels/Documentos/Code/ParlaGuesser/Dockerfile) para deploy em Fly.io, Railway ou Render.
+- **Ingestão Remota:** Alimenta o banco na nuvem executando:
+  ```bash
+  go run ./cmd/ingestor -remote-url https://sua-instancia.pockethost.io -admin-email admin@exemplo.com -admin-password segredo
+  ```
+
+Para o guia passo a passo completo de implantação, consulte o [Guia de Deploy (docs/DEPLOYMENT.md)](file:///home/joels/Documentos/Code/ParlaGuesser/docs/DEPLOYMENT.md).
+
+---
+
+## 🧩 Executando os binários do Backend
+
+Os binários compilados servem a API e o painel administrativo do PocketBase:
+
+- Linux: `./parlaguesser-backend-linux-amd64 serve`
+- macOS: `./parlaguesser-backend-darwin-arm64 serve` (ou `-amd64`)
+- Windows: `parlaguesser-backend-windows-amd64.exe serve`
+
+Acesse `http://localhost:8090/_/` para gerenciar a instância localmente.
+
+---
+
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas. O projeto funciona melhor quando a comunidade ajuda a melhorar a coleta, a lógica do jogo, a clareza da interface e a qualidade dos dados.
+
+### Fluxo sugerido
+
+1. Crie uma branch para a sua mudança:
+
+```bash
+git checkout -b feature/minha-melhoria
 ```
 
-Use o app normalmente como um jogo local. O binário gerado não precisa de instalação adicional e já serve a interface pronta em seu computador.
+2. Faça as mudanças e mantenha o código consistente com o padrão atual do projeto.
+3. Execute os testes relevantes antes de abrir o PR:
+
+```bash
+go test ./...
+cd ui && npm test
+```
+
+4. Abra um pull request com uma descrição clara do problema resolvido e do impacto esperado.
+
+### Áreas que ajudam muito
+
+- Melhoria da lógica de match entre proposta e parlamentar
+- Ajustes na interface, UX e acessibilidade
+- Limpeza e expansão dos dados importados (ex: integração do Senado)
+- Documentação e exemplos de uso
+- Validação de fontes oficiais e casos de borda
+
+### Regras simples
+
+- Prefira mudanças pequenas e focadas
+- Mantenha a linguagem e a UX em português
+- Sempre verifique como a mudança afeta os dados oficiais e a experiência da partida
+- Se a alteração mexer em dados importados, documente a origem e a forma de validação

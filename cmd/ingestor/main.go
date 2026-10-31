@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -70,46 +71,75 @@ type propositionTheme struct {
 	Name string `json:"tema"`
 }
 
+type propositionMetadata struct {
+	FullTextURL string
+	Keywords    []string
+}
+
 type chamberClient struct {
 	baseURL string
 	client  *http.Client
+}
+
+// dataStore defines persistence operations, implemented by localStore (direct PocketBase core.App)
+// or remoteStore (PocketBase REST API over HTTP for PocketBase Cloud).
+type dataStore interface {
+	upsertDeputy(ctx context.Context, deputy deputyListItem, detail deputyDetail) (string, error)
+	ensureStats(ctx context.Context, personID string) error
+	upsertProposition(ctx context.Context, personID string, item proposition, metadata propositionMetadata) error
 }
 
 func main() {
 	limit := flag.Int("limit", 50, "number of current deputies to import")
 	propsPerDeputy := flag.Int("propositions-per-deputy", 10, "recent authored propositions per deputy")
 	baseURL := flag.String("api", defaultAPIBase, "Chamber Open Data API v2 base URL")
+	remoteURL := flag.String("remote-url", "", "remote PocketBase base URL (e.g. https://your-instance.pockethost.io)")
+	adminEmail := flag.String("admin-email", "", "PocketBase admin/superuser email for remote ingestion")
+	adminPassword := flag.String("admin-password", "", "PocketBase admin/superuser password for remote ingestion")
+	adminToken := flag.String("admin-token", "", "PocketBase admin auth token for remote ingestion")
 	flag.Parse()
 
-	app := pocketbase.New()
-	app.OnBootstrap().BindFunc(func(event *core.BootstrapEvent) error {
-		if err := event.Next(); err != nil {
-			return err
-		}
-		return schema.EnsureCollections(event.App)
-	})
-	if err := app.Bootstrap(); err != nil {
-		log.Fatalf("initialize PocketBase: %v", err)
-	}
-	defer func() {
-		if err := app.ClearBootstrap(); err != nil {
-			log.Printf("close PocketBase: %v", err)
-		}
-	}()
-
 	ctx := context.Background()
+	var store dataStore
+
+	if strings.TrimSpace(*remoteURL) != "" {
+		log.Printf("Connecting to remote PocketBase instance at %s...", *remoteURL)
+		rs, err := newRemoteStore(ctx, *remoteURL, *adminEmail, *adminPassword, *adminToken)
+		if err != nil {
+			log.Fatalf("initialize remote store: %v", err)
+		}
+		store = rs
+	} else {
+		app := pocketbase.New()
+		app.OnBootstrap().BindFunc(func(event *core.BootstrapEvent) error {
+			if err := event.Next(); err != nil {
+				return err
+			}
+			return schema.EnsureCollections(event.App)
+		})
+		if err := app.Bootstrap(); err != nil {
+			log.Fatalf("initialize PocketBase: %v", err)
+		}
+		defer func() {
+			if err := app.ClearBootstrap(); err != nil {
+				log.Printf("close PocketBase: %v", err)
+			}
+		}()
+		store = &localStore{app: app}
+	}
+
 	client := chamberClient{
 		baseURL: strings.TrimRight(*baseURL, "/"),
 		client:  &http.Client{Timeout: 15 * time.Second},
 	}
-	importedDeputies, importedPropositions, err := importSample(ctx, app, client, *limit, *propsPerDeputy)
+	importedDeputies, importedPropositions, err := importSample(ctx, store, client, *limit, *propsPerDeputy)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Test-data import complete: %d deputies, %d propositions", importedDeputies, importedPropositions)
+	log.Printf("Data import complete: %d deputies, %d propositions", importedDeputies, importedPropositions)
 }
 
-func importSample(ctx context.Context, app core.App, client chamberClient, limit, propsPerDeputy int) (int, int, error) {
+func importSample(ctx context.Context, store dataStore, client chamberClient, limit, propsPerDeputy int) (int, int, error) {
 	deputies, err := client.listDeputies(ctx, limit)
 	if err != nil {
 		return 0, 0, fmt.Errorf("list deputies: %w", err)
@@ -122,11 +152,11 @@ func importSample(ctx context.Context, app core.App, client chamberClient, limit
 			return 0, importedPropositions, fmt.Errorf("fetch deputy %d: %w", deputy.ID, err)
 		}
 
-		personID, err := upsertDeputy(app, deputy, detail)
+		personID, err := store.upsertDeputy(ctx, deputy, detail)
 		if err != nil {
 			return 0, importedPropositions, fmt.Errorf("save deputy %d: %w", deputy.ID, err)
 		}
-		if err := ensureStats(app, personID); err != nil {
+		if err := store.ensureStats(ctx, personID); err != nil {
 			return 0, importedPropositions, fmt.Errorf("initialize stats for deputy %d: %w", deputy.ID, err)
 		}
 
@@ -151,7 +181,7 @@ func importSample(ctx context.Context, app core.App, client chamberClient, limit
 			if err != nil {
 				log.Printf("fetch metadata for proposition %d: %v", item.ID, err)
 			}
-			if err := upsertProposition(app, personID, item, metadata); err != nil {
+			if err := store.upsertProposition(ctx, personID, item, metadata); err != nil {
 				return 0, importedPropositions, fmt.Errorf("save proposition %d: %w", item.ID, err)
 			}
 			importedPropositions++
@@ -161,10 +191,348 @@ func importSample(ctx context.Context, app core.App, client chamberClient, limit
 	return len(deputies), importedPropositions, nil
 }
 
-type propositionMetadata struct {
-	FullTextURL string
-	Keywords    []string
+// ----------------------------------------------------------------------------
+// Local Store (Embedded PocketBase Core App)
+// ----------------------------------------------------------------------------
+
+type localStore struct {
+	app core.App
 }
+
+func (s *localStore) upsertDeputy(ctx context.Context, deputy deputyListItem, detail deputyDetail) (string, error) {
+	collection, err := s.app.FindCollectionByNameOrId("parlamentares")
+	if err != nil {
+		return "", err
+	}
+	status := detail.LastStatus
+	name := firstNonEmpty(status.Name, deputy.Name)
+	party := firstNonEmpty(status.Party, deputy.Party)
+	state := firstNonEmpty(status.State, deputy.State)
+	photoURL := firstNonEmpty(status.PhotoURL, deputy.PhotoURL)
+	profileURL := deputy.URI
+
+	record, err := findOrNewRecord(s.app, collection, "perfil_oficial_url", profileURL)
+	if err != nil {
+		return "", err
+	}
+	record.Set("nome_politico", name)
+	record.Set("nome_civil", detail.CivilName)
+	record.Set("casa", "camara")
+	record.Set("partido", party)
+	record.Set("uf", state)
+	record.Set("foto_url", photoURL)
+	record.Set("perfil_oficial_url", profileURL)
+	record.Set("status_mandato", status.Status)
+	record.Set("periodo_mandato", map[string]any{"legislatura": firstPositive(status.Legislature, deputy.Legislature)})
+	record.Set("redes_sociais", detail.Socials)
+	if err := s.app.Save(record); err != nil {
+		return "", err
+	}
+	return record.Id, nil
+}
+
+func (s *localStore) upsertProposition(ctx context.Context, personID string, item proposition, metadata propositionMetadata) error {
+	if item.ID == 0 || strings.TrimSpace(item.Summary) == "" {
+		return errors.New("proposition is missing an id or summary")
+	}
+	collection, err := s.app.FindCollectionByNameOrId("desafios")
+	if err != nil {
+		return err
+	}
+	personCollection, err := s.app.FindCollectionByNameOrId("parlamentares")
+	if err != nil {
+		return err
+	}
+	person, err := s.app.FindRecordById(personCollection, personID)
+	if err != nil {
+		return err
+	}
+
+	record, err := findOrNewRecord(s.app, collection, "fonte_url", item.URI)
+	if err != nil {
+		return err
+	}
+	date, _ := parseChamberDate(item.PresentedAt)
+	title := propositionTitle(item)
+	record.Set("tipo", "autoria_projeto")
+	record.Set("titulo", title)
+	record.Set("descricao", item.Summary)
+	record.Set("parlamentar", person.Id)
+	record.Set("fonte_url", item.URI)
+	record.Set("url", item.URI)
+	record.Set("urlInteiroTeor", metadata.FullTextURL)
+	record.Set("keywords", metadata.Keywords)
+	if !date.IsZero() {
+		record.Set("data_evento", date)
+	}
+	return s.app.Save(record)
+}
+
+func (s *localStore) ensureStats(ctx context.Context, personID string) error {
+	collection, err := s.app.FindCollectionByNameOrId("estatisticas_parlamentares")
+	if err != nil {
+		return err
+	}
+	if _, err := s.app.FindFirstRecordByData(collection, "parlamentar", personID); err == nil {
+		return nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	personCollection, err := s.app.FindCollectionByNameOrId("parlamentares")
+	if err != nil {
+		return err
+	}
+	person, err := s.app.FindRecordById(personCollection, personID)
+	if err != nil {
+		return err
+	}
+	record := core.NewRecord(collection)
+	record.Set("parlamentar", person.Id)
+	record.Set("desafios_publicados", 0)
+	record.Set("respostas_corretas", 0)
+	record.Set("destaques", 0)
+	return s.app.Save(record)
+}
+
+// ----------------------------------------------------------------------------
+// Remote Store (PocketBase Cloud REST API)
+// ----------------------------------------------------------------------------
+
+type remoteStore struct {
+	baseURL string
+	token   string
+	client  *http.Client
+}
+
+func newRemoteStore(ctx context.Context, baseURL, email, password, token string) (*remoteStore, error) {
+	baseURL = strings.TrimRight(baseURL, "/")
+	rs := &remoteStore{
+		baseURL: baseURL,
+		token:   token,
+		client:  &http.Client{Timeout: 30 * time.Second},
+	}
+
+	if rs.token == "" && email != "" && password != "" {
+		body, err := json.Marshal(map[string]string{
+			"identity": email,
+			"password": password,
+		})
+		if err != nil {
+			return nil, err
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, rs.baseURL+"/api/collections/_superusers/auth-with-password", bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := rs.client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("remote superuser auth: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+			respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+			return nil, fmt.Errorf("auth error (%s): %s", resp.Status, string(respBody))
+		}
+		var authResp struct {
+			Token string `json:"token"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
+			return nil, err
+		}
+		rs.token = authResp.Token
+	}
+
+	return rs, nil
+}
+
+func (rs *remoteStore) upsertDeputy(ctx context.Context, deputy deputyListItem, detail deputyDetail) (string, error) {
+	status := detail.LastStatus
+	name := firstNonEmpty(status.Name, deputy.Name)
+	party := firstNonEmpty(status.Party, deputy.Party)
+	state := firstNonEmpty(status.State, deputy.State)
+	photoURL := firstNonEmpty(status.PhotoURL, deputy.PhotoURL)
+	profileURL := deputy.URI
+
+	fields := map[string]any{
+		"nome_politico":      name,
+		"nome_civil":         detail.CivilName,
+		"casa":               "camara",
+		"partido":            party,
+		"uf":                 state,
+		"foto_url":           photoURL,
+		"perfil_oficial_url": profileURL,
+		"status_mandato":     status.Status,
+		"periodo_mandato":    map[string]any{"legislatura": firstPositive(status.Legislature, deputy.Legislature)},
+		"redes_sociais":      detail.Socials,
+	}
+
+	existingID, err := rs.findRecordID(ctx, "parlamentares", fmt.Sprintf("perfil_oficial_url='%s'", profileURL))
+	if err != nil {
+		return "", err
+	}
+
+	if existingID != "" {
+		return existingID, rs.updateRecord(ctx, "parlamentares", existingID, fields)
+	}
+
+	return rs.createRecord(ctx, "parlamentares", fields)
+}
+
+func (rs *remoteStore) upsertProposition(ctx context.Context, personID string, item proposition, metadata propositionMetadata) error {
+	date, _ := parseChamberDate(item.PresentedAt)
+	title := propositionTitle(item)
+
+	fields := map[string]any{
+		"tipo":            "autoria_projeto",
+		"titulo":          title,
+		"descricao":       item.Summary,
+		"parlamentar":     personID,
+		"fonte_url":       item.URI,
+		"url":             item.URI,
+		"urlInteiroTeor":  metadata.FullTextURL,
+		"keywords":        metadata.Keywords,
+	}
+	if !date.IsZero() {
+		fields["data_evento"] = date.Format(time.RFC3339)
+	}
+
+	existingID, err := rs.findRecordID(ctx, "desafios", fmt.Sprintf("fonte_url='%s'", item.URI))
+	if err != nil {
+		return err
+	}
+
+	if existingID != "" {
+		return rs.updateRecord(ctx, "desafios", existingID, fields)
+	}
+
+	_, err = rs.createRecord(ctx, "desafios", fields)
+	return err
+}
+
+func (rs *remoteStore) ensureStats(ctx context.Context, personID string) error {
+	existingID, err := rs.findRecordID(ctx, "estatisticas_parlamentares", fmt.Sprintf("parlamentar='%s'", personID))
+	if err != nil {
+		return err
+	}
+	if existingID != "" {
+		return nil
+	}
+
+	fields := map[string]any{
+		"parlamentar":         personID,
+		"desafios_publicados": 0,
+		"respostas_corretas":  0,
+		"destaques":           0,
+	}
+	_, err = rs.createRecord(ctx, "estatisticas_parlamentares", fields)
+	return err
+}
+
+func (rs *remoteStore) findRecordID(ctx context.Context, collection, filter string) (string, error) {
+	endpoint := fmt.Sprintf("%s/api/collections/%s/records?filter=(%s)&perPage=1", rs.baseURL, collection, url.QueryEscape(filter))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	if rs.token != "" {
+		req.Header.Set("Authorization", rs.token)
+	}
+
+	resp, err := rs.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return "", nil
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return "", fmt.Errorf("find record in %s: %s (%s)", collection, resp.Status, string(b))
+	}
+
+	var result struct {
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	if len(result.Items) > 0 {
+		return result.Items[0].ID, nil
+	}
+	return "", nil
+}
+
+func (rs *remoteStore) createRecord(ctx context.Context, collection string, fields map[string]any) (string, error) {
+	data, err := json.Marshal(fields)
+	if err != nil {
+		return "", err
+	}
+	endpoint := fmt.Sprintf("%s/api/collections/%s/records", rs.baseURL, collection)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if rs.token != "" {
+		req.Header.Set("Authorization", rs.token)
+	}
+
+	resp, err := rs.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return "", fmt.Errorf("create record in %s: %s (%s)", collection, resp.Status, string(b))
+	}
+
+	var res struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", err
+	}
+	return res.ID, nil
+}
+
+func (rs *remoteStore) updateRecord(ctx context.Context, collection, id string, fields map[string]any) error {
+	data, err := json.Marshal(fields)
+	if err != nil {
+		return err
+	}
+	endpoint := fmt.Sprintf("%s/api/collections/%s/records/%s", rs.baseURL, collection, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, endpoint, bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if rs.token != "" {
+		req.Header.Set("Authorization", rs.token)
+	}
+
+	resp, err := rs.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("update record %s in %s: %s (%s)", id, collection, resp.Status, string(b))
+	}
+	return nil
+}
+
+// ----------------------------------------------------------------------------
+// Chamber Client & Helpers
+// ----------------------------------------------------------------------------
 
 func (client chamberClient) getPropositionMetadata(ctx context.Context, id int) (propositionMetadata, error) {
 	var detail struct {
@@ -252,106 +620,11 @@ func (client chamberClient) getJSON(ctx context.Context, path string, target any
 	return json.NewDecoder(response.Body).Decode(target)
 }
 
-func upsertDeputy(app core.App, deputy deputyListItem, detail deputyDetail) (string, error) {
-	collection, err := app.FindCollectionByNameOrId("parlamentares")
-	if err != nil {
-		return "", err
-	}
-	status := detail.LastStatus
-	name := firstNonEmpty(status.Name, deputy.Name)
-	party := firstNonEmpty(status.Party, deputy.Party)
-	state := firstNonEmpty(status.State, deputy.State)
-	photoURL := firstNonEmpty(status.PhotoURL, deputy.PhotoURL)
-	profileURL := deputy.URI
-
-	record, err := findOrNewRecord(app, collection, "perfil_oficial_url", profileURL)
-	if err != nil {
-		return "", err
-	}
-	record.Set("nome_politico", name)
-	record.Set("nome_civil", detail.CivilName)
-	record.Set("casa", "camara")
-	record.Set("partido", party)
-	record.Set("uf", state)
-	record.Set("foto_url", photoURL)
-	record.Set("perfil_oficial_url", profileURL)
-	record.Set("status_mandato", status.Status)
-	record.Set("periodo_mandato", map[string]any{"legislatura": firstPositive(status.Legislature, deputy.Legislature)})
-	record.Set("redes_sociais", detail.Socials)
-	if err := app.Save(record); err != nil {
-		return "", err
-	}
-	return record.Id, nil
-}
-
-func upsertProposition(app core.App, personID string, item proposition, metadata propositionMetadata) error {
-	if item.ID == 0 || strings.TrimSpace(item.Summary) == "" {
-		return errors.New("proposition is missing an id or summary")
-	}
-	collection, err := app.FindCollectionByNameOrId("desafios")
-	if err != nil {
-		return err
-	}
-	personCollection, err := app.FindCollectionByNameOrId("parlamentares")
-	if err != nil {
-		return err
-	}
-	person, err := app.FindRecordById(personCollection, personID)
-	if err != nil {
-		return err
-	}
-
-	record, err := findOrNewRecord(app, collection, "fonte_url", item.URI)
-	if err != nil {
-		return err
-	}
-	date, _ := parseChamberDate(item.PresentedAt)
-	title := propositionTitle(item)
-	record.Set("tipo", "autoria_projeto")
-	record.Set("titulo", title)
-	record.Set("descricao", item.Summary)
-	record.Set("parlamentar", person.Id)
-	record.Set("fonte_url", item.URI)
-	record.Set("url", item.URI)
-	record.Set("urlInteiroTeor", metadata.FullTextURL)
-	record.Set("keywords", metadata.Keywords)
-	if !date.IsZero() {
-		record.Set("data_evento", date)
-	}
-	return app.Save(record)
-}
-
 func propositionTitle(item proposition) string {
 	if item.Year <= 0 {
 		return fmt.Sprintf("%s %d", item.Type, item.Number)
 	}
 	return fmt.Sprintf("%s %d/%d", item.Type, item.Number, item.Year)
-}
-
-func ensureStats(app core.App, personID string) error {
-	collection, err := app.FindCollectionByNameOrId("estatisticas_parlamentares")
-	if err != nil {
-		return err
-	}
-	if _, err := app.FindFirstRecordByData(collection, "parlamentar", personID); err == nil {
-		return nil
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-	personCollection, err := app.FindCollectionByNameOrId("parlamentares")
-	if err != nil {
-		return err
-	}
-	person, err := app.FindRecordById(personCollection, personID)
-	if err != nil {
-		return err
-	}
-	record := core.NewRecord(collection)
-	record.Set("parlamentar", person.Id)
-	record.Set("desafios_publicados", 0)
-	record.Set("respostas_corretas", 0)
-	record.Set("destaques", 0)
-	return app.Save(record)
 }
 
 func findOrNewRecord(app core.App, collection *core.Collection, field, value string) (*core.Record, error) {

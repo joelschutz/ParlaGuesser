@@ -4,40 +4,37 @@ Este documento contém o planejamento de inicialização do repositório para o 
 
 ---
 
-## 📂 Estrutura Proposta do Repositório
+## 📂 Estrutura Proposta do Repositório (Desacoplado)
 
 ```text
 parlaguessr/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                 # Automação de testes e linting
-│       └── release.yml            # Build de executáveis e deploy
+│       └── release.yml            # Build de executáveis backend e bundle frontend
 ├── cmd/
-│   └── ingestor/                  # CLI / Workers de ingestão de dados
-│       └── main.go                # Script de consumo das APIs (Câmara/Senado)
-├── pb_migrations/                 # Migrações do banco de dados PocketBase
-│   └── 1710000000_init_schema.go  # Definição inicial das coleções
-├── pb_hooks/                      # Lógicas estendidas do PocketBase em JS/Go
-├── pb_public/                     # Build do frontend estático servido pelo Go
-├── ui/                            # Aplicação Web Frontend (React + Vite)
-│   ├── public/
+│   └── ingestor/                  # CLI de ingestão (suporte local e PocketBase Cloud)
+│       ├── main.go                # Script de consumo e upsert (local/remoto)
+│       └── main_test.go
+├── internal/
+│   └── schema/
+│       └── schema.go              # Definição programática das coleções
+├── ui/                            # Aplicação Web Frontend Estática (React + Vite)
 │   ├── src/
-│   │   ├── components/            # Componentes reutilizáveis (cards, timers, etc.)
-│   │   ├── hooks/                 # Custom React Hooks (ex: useGameLoop)
-│   │   ├── lib/                   # Cliente PocketBase e utilitários
-│   │   ├── pages/                 # Páginas (Home, Game, Revelação, Ranking)
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── index.html
+│   │   ├── App.jsx                # Componente principal do jogo
+│   │   ├── game.js                # Regras de negócio e seleção de rodadas
+│   │   ├── pocketbase.js          # Cliente PocketBase com resolução dinâmica de URL
+│   │   └── ...
+│   ├── dist/                      # Build de produção pronto para hospedagem estática
+│   ├── .env.example               # Exemplo de configuração da URL do backend
 │   ├── package.json
-│   ├── tailwind.config.js
 │   └── vite.config.js
-├── scripts/                       # Scripts auxiliares para dev/deployment
+├── Dockerfile                     # Container otimizado para deploy do backend
+├── pb_schema.json                 # Schema exportado para PocketBase Cloud / PocketHost
 ├── .gitignore
-├── GOALS.md
 ├── LICENSE
-├── main.go                        # Ponto de entrada do backend PocketBase/Go
-├── MILESTONES.md                  # Acompanhamento do ciclo de vida
+├── main.go                        # Backend PocketBase/Go independente (API REST)
+├── milestones_do_projeto.md       # Acompanhamento do ciclo de vida
 └── README.md                      # Documentação principal
 ```
 

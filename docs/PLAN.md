@@ -4,9 +4,9 @@
 
 ## Stack e estrutura
 
-- Backend: Go e PocketBase, com SQLite, API REST e painel administrativo.
+- Backend: Go e PocketBase, com SQLite, API REST, migrações e painel administrativo (preparado para PocketBase Cloud ou deploy via Docker).
 - Frontend: React, Vite, Tailwind CSS e PocketBase JavaScript SDK em `ui/`.
-- Build de produção: `ui/` compila para `pb_public/`, servido pelo PocketBase.
+- Build de produção: `ui/` compila para `dist/`, pronto para hospedagem estática independente (GitHub Pages, Cloudflare Pages, Vercel, Netlify) configurado para se comunicar com um backend remoto.
 
 O servidor cria as coleções `parlamentares`, `desafios`, `estatisticas_parlamentares` e `destaques_e_reacoes` na primeira inicialização. A coleção de autenticação `users` também é criada com o campo opcional `display_name`. Os dados são públicos para leitura; escrita permanece restrita por padrão.
 
@@ -30,12 +30,13 @@ npm install
 npm run dev
 ```
 
-O Vite fica em `http://localhost:5173`. Ele tenta conectar ao PocketBase em `http://127.0.0.1:8090`; configure `VITE_POCKETBASE_URL` para usar outro endereço. Para servir a interface pelo PocketBase:
+O Vite fica em `http://localhost:5173`. Ele tenta conectar ao PocketBase em `http://127.0.0.1:8090`; configure `VITE_POCKETBASE_URL` para usar outro endereço (ou aponte para sua instância no PocketBase Cloud). Para compilar a interface estática:
 
 ```bash
 cd ui
 npm run build
 ```
+Os arquivos gerados em `ui/dist/` podem ser publicados em qualquer CDN ou hospedagem estática. Consulte [docs/DEPLOYMENT.md](file:///home/joels/Documentos/Code/ParlaGuesser/docs/DEPLOYMENT.md) para o guia completo.
 
 ## Estado do MVP
 
